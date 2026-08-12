@@ -384,7 +384,7 @@ if [ -n "$WEBHOOK_URL" ] && { [ "$WARN" -gt 0 ] || [ "$REPORT_ALWAYS" = "1" ]; }
   html_b64=$(base64 < "$REPORT" 2>/dev/null | tr -d '\n')
   PAYLOAD=$(mktemp 2>/dev/null || echo "/tmp/msc-payload.$$")
   cat > "$PAYLOAD" <<JSON
-{"tool":"$(json_esc "$COMPANY") Mac Endpoint Security","company":"$(json_esc "$COMPANY")","computer":"$(json_esc "$COMPUTER")","user":"$(json_esc "$WHO")","os":"$(json_esc "$OSVER")","timestamp":"$(json_esc "$NOW")","overall":"$OVERALL","counts":{"attention":$WARN,"review":$REVIEW,"ok":$OKN},"findings":[$FINDINGS_JSON],"text":"$(json_esc "$summary_line")","report_html_b64":"$html_b64"}
+{"tool":"$(json_esc "$COMPANY") Mac Endpoint Security","company":"$(json_esc "$COMPANY")","token":"$(json_esc "$REPORT_TOKEN")","computer":"$(json_esc "$COMPUTER")","user":"$(json_esc "$WHO")","os":"$(json_esc "$OSVER")","timestamp":"$(json_esc "$NOW")","overall":"$OVERALL","counts":{"attention":$WARN,"review":$REVIEW,"ok":$OKN},"findings":[$FINDINGS_JSON],"text":"$(json_esc "$summary_line")","report_html_b64":"$html_b64"}
 JSON
   if [ -n "$REPORT_TOKEN" ]; then
     curl -sS -m 30 -X POST -H 'Content-Type: application/json' -H "X-Report-Token: $REPORT_TOKEN" --data @"$PAYLOAD" "$WEBHOOK_URL" >/dev/null 2>&1 || true
