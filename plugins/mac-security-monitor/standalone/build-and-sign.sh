@@ -35,6 +35,7 @@ VERSION="${VERSION:-1.0.0}"
 BUNDLE_ID="${BUNDLE_ID:-com.jnds0123.mac-security-check}"
 COMPANY="${COMPANY:-Nourison Home}"          # company name shown on installer screens
 APP_TITLE="${APP_TITLE:-$COMPANY Mac Endpoint Security}"  # installer window title
+PKG_NAME="${PKG_NAME:-MacSecurityCheck}"     # base name of the output .pkg file
 TEAM_ID="${TEAM_ID:-}"                       # e.g. ABCDE12345 (required)
 INSTALLER_IDENTITY="${INSTALLER_IDENTITY:-}" # full "Developer ID Installer: ..." string; auto-detected if blank
 NOTARY_PROFILE="${NOTARY_PROFILE:-MSC_NOTARY}"
@@ -45,7 +46,7 @@ ENGINE="$HERE/mac-security-check.command"
 RES="$HERE/resources"
 BUILD="$HERE/.build"
 DIST="$HERE/dist"
-PKG="$DIST/MacSecurityCheck-$VERSION.pkg"
+PKG="$DIST/$PKG_NAME-$VERSION.pkg"
 
 red(){ printf '\033[31m%s\033[0m\n' "$1"; }
 grn(){ printf '\033[32m%s\033[0m\n' "$1"; }
