@@ -1,0 +1,3 @@
+# Build artifacts — .build/ contains a generated config.sh with SMTP secrets.
+.build/
+dist/

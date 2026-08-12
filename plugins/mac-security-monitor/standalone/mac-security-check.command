@@ -50,6 +50,24 @@ WARN=0      # strong signals — look at these
 REVIEW=0    # worth a glance
 OKN=0       # things confirmed fine
 CARDS=""    # accumulated HTML
+FINDINGS_JSON=""              # structured warn/review findings for IT reporting
+OSVER="$(sw_vers -productVersion 2>/dev/null || echo '?')"
+WHO="$(id -un 2>/dev/null || echo user)"
+
+# Optional site configuration written by the installer: COMPANY (branding shown
+# in alerts) and WEBHOOK_URL (where to POST findings for central IT visibility).
+# Absent on a plain double-click run, so reporting simply stays off.
+COMPANY="Mac Security Check"
+WEBHOOK_URL=""                    # optional: POST compact JSON summary every run
+SMTP_HOST=""                      # e.g. smtp.mailgun.org
+SMTP_PORT="587"                   # 587 = STARTTLS, 465 = implicit SSL
+SMTP_USER=""                      # SMTP login (e.g. postmaster@mg.yourcompany.com)
+SMTP_PASS=""                      # SMTP password (see security note in README)
+SMTP_FROM=""                      # From: header, e.g. "Company Security <security@mg.yourcompany.com>"
+REPORT_EMAIL=""                   # IT recipient, e.g. it-security@yourcompany.com
+REPORT_ALWAYS=0                   # 1 = email every run (inventory); 0 = only on findings
+CONFIG="/Library/Application Support/MacSecurityCheck/config.sh"
+[ -f "$CONFIG" ] && . "$CONFIG"
 
 say() { [ "$QUIET" -eq 1 ] || echo "$1"; }
 
@@ -72,6 +90,17 @@ esc() {
   printf '%s' "$s"
 }
 
+# JSON-escape a string (for the IT reporting payload).
+json_esc() {
+  local s="$1"
+  s=${s//\\/\\\\}
+  s=${s//\"/\\\"}
+  s=${s//$'\n'/ }
+  s=${s//$'\r'/ }
+  s=${s//$'\t'/ }
+  printf '%s' "$s"
+}
+
 # add_card LEVEL "Title" "What it is" "Why / what to do"
 #   LEVEL = warn | review | ok
 add_card() {
@@ -88,6 +117,11 @@ add_card() {
     <div class=\"card-what\">$(esc "$what")</div>
     <div class=\"card-why\">$(esc "$why")</div>
   </div>"
+  # Record warn/review items as structured data for central IT reporting.
+  if [ "$level" = "warn" ] || [ "$level" = "review" ]; then
+    local sep=""; [ -n "$FINDINGS_JSON" ] && sep=","
+    FINDINGS_JSON="$FINDINGS_JSON$sep{\"level\":\"$level\",\"title\":\"$(json_esc "$title")\",\"detail\":\"$(json_esc "$what")\",\"why\":\"$(json_esc "$why")\"}"
+  fi
 }
 
 section() {
@@ -336,19 +370,92 @@ HTMLFOOT
 ls -1t "$ARCHIVE"/Mac-Security-Report-*.html 2>/dev/null | tail -n +13 | while read -r old; do rm -f "$old"; done
 
 # ---------------------------------------------------------------------------
+# Central reporting to IT (only if configured by the installer's config.sh).
+# Sends a compact summary of flagged software — never personal file content.
+# ---------------------------------------------------------------------------
+summary_line="$COMPANY Security — $COMPUTER ($WHO): $WARN need attention, $REVIEW to review [$OVERALL]"
+
+# (a) Optional lightweight JSON webhook — sent every run for fleet inventory.
+if [ -n "$WEBHOOK_URL" ]; then
+  PAYLOAD=$(mktemp 2>/dev/null || echo "/tmp/msc-payload.$$")
+  cat > "$PAYLOAD" <<JSON
+{"tool":"$(json_esc "$COMPANY") Mac Endpoint Security","computer":"$(json_esc "$COMPUTER")","user":"$(json_esc "$WHO")","os":"$(json_esc "$OSVER")","timestamp":"$(json_esc "$NOW")","overall":"$OVERALL","counts":{"attention":$WARN,"review":$REVIEW,"ok":$OKN},"findings":[$FINDINGS_JSON],"text":"$(json_esc "$summary_line")"}
+JSON
+  curl -sS -m 20 -X POST -H 'Content-Type: application/json' --data @"$PAYLOAD" "$WEBHOOK_URL" >/dev/null 2>&1 || true
+  rm -f "$PAYLOAD" 2>/dev/null || true
+fi
+
+# (b) Optional email with the full HTML report attached, via SMTP (Mailgun,
+#     Microsoft 365, Gmail, etc.). Sent when something needs attention, or
+#     every run if REPORT_ALWAYS=1.
+if [ -n "$SMTP_HOST" ] && [ -n "$SMTP_USER" ] && [ -n "$SMTP_PASS" ] && [ -n "$REPORT_EMAIL" ]; then
+  if [ "$WARN" -gt 0 ] || [ "$REPORT_ALWAYS" = "1" ]; then
+    if [ "$WARN" -gt 0 ]; then subj="[$COMPANY Security] ACTION: $WARN item(s) need attention on $COMPUTER ($WHO)"
+    else                       subj="[$COMPANY Security] Check OK on $COMPUTER ($WHO) — $REVIEW to review"; fi
+    from="${SMTP_FROM:-$SMTP_USER}"
+    bnd="MSC${STAMP}$$"
+    findings_txt=$(printf '%s' "$FINDINGS_JSON" | sed 's/},{/}\
+{/g')
+    RAW=$(mktemp 2>/dev/null || echo "/tmp/msc-raw.$$")
+    EML=$(mktemp 2>/dev/null || echo "/tmp/msc-eml.$$")
+    {
+      echo "From: $from"
+      echo "To: $REPORT_EMAIL"
+      echo "Subject: $subj"
+      echo "MIME-Version: 1.0"
+      echo "Content-Type: multipart/mixed; boundary=\"$bnd\""
+      echo
+      echo "--$bnd"
+      echo "Content-Type: text/plain; charset=\"utf-8\""
+      echo
+      echo "$summary_line"
+      echo
+      echo "Automated message from $COMPANY Mac Endpoint Security. Full report attached."
+      echo
+      echo "Flagged items:"
+      echo "$findings_txt"
+      echo
+      echo "--$bnd"
+      echo "Content-Type: text/html; charset=\"utf-8\"; name=\"Mac-Security-Report.html\""
+      echo "Content-Transfer-Encoding: base64"
+      echo "Content-Disposition: attachment; filename=\"Mac-Security-Report.html\""
+      echo
+      base64 < "$REPORT"
+      echo "--$bnd--"
+    } > "$RAW"
+    # SMTP wants CRLF line endings.
+    awk '{ printf "%s\r\n", $0 }' "$RAW" > "$EML"
+    url="smtp://$SMTP_HOST:$SMTP_PORT"
+    [ "$SMTP_PORT" = "465" ] && url="smtps://$SMTP_HOST:465"
+    curl -s -m 40 --ssl-reqd --url "$url" \
+      --user "$SMTP_USER:$SMTP_PASS" \
+      --mail-from "$SMTP_USER" \
+      --mail-rcpt "$REPORT_EMAIL" \
+      --upload-file "$EML" >/dev/null 2>&1 || true
+    rm -f "$RAW" "$EML" 2>/dev/null || true
+  fi
+fi
+
+# ---------------------------------------------------------------------------
 # Done. Behavior depends on mode.
 # ---------------------------------------------------------------------------
 if [ "$QUIET" -eq 1 ]; then
   # Background run: stay silent unless something needs attention.
   if [ "$WARN" -gt 0 ]; then
-    # Surface a copy on the Desktop, notify, and open it.
+    # Surface a copy on the Desktop and open it.
     DESKTOP="$HOME/Desktop"; [ -w "$DESKTOP" ] || DESKTOP="$HOME"
     ALERT="$DESKTOP/Mac-Security-ALERT-$STAMP.html"
     cp "$REPORT" "$ALERT" 2>/dev/null && REPORT="$ALERT"
-    osascript -e "display notification \"Found $WARN item(s) that need a look. A report was placed on your Desktop.\" with title \"Mac Security Check\" sound name \"Ping\"" >/dev/null 2>&1 || true
+    open "$REPORT" >/dev/null 2>&1 || true
+    # Unmissable modal alert the user must click to dismiss.
+    amsg="$COMPANY Endpoint Security found $WARN item(s) on this Mac that need attention"
+    [ "$REVIEW" -gt 0 ] && amsg="$amsg (and $REVIEW more to review)"
+    amsg="$amsg. A detailed report has opened and was saved to your Desktop. Please review it and contact the IT Department if you did not expect this."
+    osascript -e "display dialog \"$amsg\" with title \"$COMPANY — Security Alert\" buttons {\"View Report\"} default button \"View Report\" with icon caution" >/dev/null 2>&1 || true
     open "$REPORT" >/dev/null 2>&1 || true
   fi
-  # Clean or review-only weeks: no notification, report stays archived quietly.
+  # Clean or review-only weeks: no user interruption; report stays archived
+  # quietly (and IT still gets the webhook/email per the config above).
   exit 0
 fi
 
