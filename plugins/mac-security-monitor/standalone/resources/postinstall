@@ -1,0 +1,28 @@
+#!/bin/bash
+#
+# pkg postinstall — load the LaunchAgent for the user who is actually logged
+# in (the installer itself runs as root). RunAtLoad=true means bootstrapping
+# it here also produces the very first report immediately.
+#
+# __BUNDLE_ID__ is substituted by build-and-sign.sh at build time.
+
+BUNDLE_ID="__BUNDLE_ID__"
+PLIST="/Library/LaunchAgents/${BUNDLE_ID}.plist"
+
+# Make sure the engine is executable.
+chmod 755 "/Library/Application Support/MacSecurityCheck/mac-security-check" 2>/dev/null || true
+chmod 644 "$PLIST" 2>/dev/null || true
+
+# Who is at the keyboard right now?
+CONSOLE_USER=$(stat -f %Su /dev/console 2>/dev/null)
+if [ -n "$CONSOLE_USER" ] && [ "$CONSOLE_USER" != "root" ]; then
+  UID_NUM=$(id -u "$CONSOLE_USER" 2>/dev/null)
+  if [ -n "$UID_NUM" ]; then
+    # Reload cleanly in case a previous version was installed.
+    launchctl bootout "gui/${UID_NUM}" "$PLIST" 2>/dev/null || true
+    launchctl bootstrap "gui/${UID_NUM}" "$PLIST" 2>/dev/null \
+      || launchctl load -w "$PLIST" 2>/dev/null || true
+  fi
+fi
+
+exit 0

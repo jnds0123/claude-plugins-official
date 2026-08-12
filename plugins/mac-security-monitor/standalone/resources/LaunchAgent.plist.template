@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  LaunchAgent for Mac Security Check.
+  __BUNDLE_ID__ is replaced by build-and-sign.sh with your chosen identifier.
+  Runs once at login (RunAtLoad) and every Monday at 10:00 (StartCalendarInterval),
+  in quiet mode: it only notifies you when something needs attention.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>__BUNDLE_ID__</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Library/Application Support/MacSecurityCheck/mac-security-check</string>
+        <string>--quiet</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Weekday</key>
+        <integer>1</integer>
+        <key>Hour</key>
+        <integer>10</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/mac-security-check.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/mac-security-check.log</string>
+</dict>
+</plist>
