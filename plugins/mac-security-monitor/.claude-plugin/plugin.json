@@ -1,0 +1,8 @@
+{
+  "name": "mac-security-monitor",
+  "description": "Defensive macOS monitoring: audit background programs, launch agents/daemons, cron jobs, login items, and network listeners to spot unauthorized scripts and persistence, with baseline diffing to catch new items",
+  "author": {
+    "name": "Anthropic",
+    "email": "support@anthropic.com"
+  }
+}

@@ -341,6 +341,16 @@
       "homepage": "https://github.com/anthropics/claude-plugins-public/tree/main/plugins/security-guidance"
     },
     {
+      "name": "mac-security-monitor",
+      "description": "Defensive macOS monitoring: audit background programs, launch agents/daemons, cron jobs, login items, and network listeners to spot unauthorized scripts and persistence, with baseline diffing to catch new items",
+      "author": {
+        "name": "Anthropic",
+        "email": "support@anthropic.com"
+      },
+      "source": "./plugins/mac-security-monitor",
+      "category": "security"
+    },
+    {
       "name": "code-review",
       "description": "Automated code review for pull requests using multiple specialized agents with confidence-based scoring to filter false positives",
       "author": {
