@@ -100,7 +100,7 @@ section() {
 # exhaustive — a match means "almost certainly fine"; a non-match just means
 # "we couldn't auto-confirm it," NOT "bad."
 is_known_vendor() {
-  echo "$1" | grep -qiE '(com\.apple\.|com\.google\.|keystone|com\.microsoft\.|com\.adobe\.|dropbox|com\.docker\.|us\.zoom\.|com\.spotify\.|1password|com\.agilebits|com\.logi|logitech|com\.jamf|com\.crowdstrike|sentinelone|com\.amazon|slack|com\.citrix|webex|com\.teamviewer|com\.parallels|/Applications/)'
+  echo "$1" | grep -qiE '(com\.apple\.|com\.google\.|keystone|com\.microsoft\.|com\.adobe\.|dropbox|com\.docker\.|us\.zoom\.|com\.spotify\.|1password|com\.agilebits|com\.logi|logitech|com\.parallels|com\.amazon|slack|webex|com\.teamviewer|com\.citrix|com\.vmware|com\.cisco|umbrella|com\.zscaler|zscaler|netskope|okta|com\.jamf|jamf|com\.crowdstrike|falcon|sentinelone|com\.fortinet|forticlient|fortimonitor|com\.microsoft\.wdav|defender|com\.kandji|kandji|mosyle|addigy|nomad|/Applications/)'
 }
 
 # Judge a launchd plist. Emits a card.
