@@ -1,10 +1,10 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "claude-plugins-official",
-  "description": "Directory of popular Claude Code extensions including development tools, productivity plugins, and MCP integrations",
+  "name": "jnds-plugins",
+  "description": "jnds0123's fork of the Claude Code plugin directory, including the mac-security-monitor plugin",
   "owner": {
-    "name": "Anthropic",
-    "email": "support@anthropic.com"
+    "name": "jnds0123",
+    "email": "alegion@j2network.com.ph"
   },
   "plugins": [
     {
