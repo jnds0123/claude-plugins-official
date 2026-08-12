@@ -33,6 +33,8 @@ set -euo pipefail
 # ----------------------------- configuration --------------------------------
 VERSION="${VERSION:-1.0.0}"
 BUNDLE_ID="${BUNDLE_ID:-com.jnds0123.mac-security-check}"
+COMPANY="${COMPANY:-Nourison Home}"          # company name shown on installer screens
+APP_TITLE="${APP_TITLE:-$COMPANY Mac Endpoint Security}"  # installer window title
 TEAM_ID="${TEAM_ID:-}"                       # e.g. ABCDE12345 (required)
 INSTALLER_IDENTITY="${INSTALLER_IDENTITY:-}" # full "Developer ID Installer: ..." string; auto-detected if blank
 NOTARY_PROFILE="${NOTARY_PROFILE:-MSC_NOTARY}"
@@ -55,6 +57,8 @@ inf(){ printf '  %s\n' "$1"; }
 echo "== Mac Security Check — build & sign =="
 inf "version:    $VERSION"
 inf "bundle id:  $BUNDLE_ID"
+inf "company:    $COMPANY"
+inf "title:      $APP_TITLE"
 
 # ----------------------- auto-detect installer identity ---------------------
 if [ -z "$INSTALLER_IDENTITY" ]; then
@@ -96,11 +100,24 @@ pkgbuild \
   --install-location "/" \
   "$COMPONENT"
 
+# Prepare the installer UI: substitute placeholders into the distribution file
+# and the welcome/license/conclusion resources.
+grn "Preparing installer screens ($COMPANY)..."
+RESDIR="$BUILD/installer-resources"
+mkdir -p "$RESDIR"
+for html in welcome license conclusion; do
+  sed "s/__COMPANY__/$COMPANY/g" "$HERE/installer-resources/$html.html" > "$RESDIR/$html.html"
+done
+sed -e "s/__BUNDLE_ID__/$BUNDLE_ID/g" \
+    -e "s/__VERSION__/$VERSION/g" \
+    -e "s/__TITLE__/$APP_TITLE/g" \
+    "$HERE/distribution.xml.template" > "$BUILD/distribution.xml"
+
 grn "Building signed product installer..."
 productbuild \
-  --identifier "$BUNDLE_ID" \
-  --version "$VERSION" \
-  --package "$COMPONENT" \
+  --distribution "$BUILD/distribution.xml" \
+  --resources "$RESDIR" \
+  --package-path "$BUILD" \
   --sign "$INSTALLER_IDENTITY" \
   "$PKG"
 

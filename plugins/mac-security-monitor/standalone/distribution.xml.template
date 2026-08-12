@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Installer UI definition for the Mac Security Check .pkg.
+  build-and-sign.sh substitutes __BUNDLE_ID__, __VERSION__, and __TITLE__.
+  Welcome / license / conclusion screens come from installer-resources/.
+-->
+<installer-gui-script minSpecVersion="1">
+    <title>__TITLE__</title>
+    <welcome    file="welcome.html"    mime-type="text/html"/>
+    <license    file="license.html"    mime-type="text/html"/>
+    <conclusion file="conclusion.html" mime-type="text/html"/>
+
+    <options customize="never" hostArchitectures="arm64,x86_64"/>
+
+    <choices-outline>
+        <line choice="default">
+            <line choice="__BUNDLE_ID__"/>
+        </line>
+    </choices-outline>
+    <choice id="default"/>
+    <choice id="__BUNDLE_ID__" visible="false">
+        <pkg-ref id="__BUNDLE_ID__"/>
+    </choice>
+
+    <pkg-ref id="__BUNDLE_ID__" version="__VERSION__" onConclusion="none">component.pkg</pkg-ref>
+</installer-gui-script>
