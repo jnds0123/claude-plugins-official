@@ -65,7 +65,8 @@ SMTP_USER=""                      # SMTP login (e.g. postmaster@mg.yourcompany.c
 SMTP_PASS=""                      # SMTP password (see security note in README)
 SMTP_FROM=""                      # From: header, e.g. "Company Security <security@mg.yourcompany.com>"
 REPORT_EMAIL=""                   # IT recipient, e.g. it-security@yourcompany.com
-REPORT_ALWAYS=0                   # 1 = email every run (inventory); 0 = only on findings
+REPORT_ALWAYS=0                   # 1 = report every run (inventory); 0 = only on findings
+REPORT_TOKEN=""                   # optional shared secret sent as X-Report-Token header
 CONFIG="/Library/Application Support/MacSecurityCheck/config.sh"
 [ -f "$CONFIG" ] && . "$CONFIG"
 
@@ -375,13 +376,21 @@ ls -1t "$ARCHIVE"/Mac-Security-Report-*.html 2>/dev/null | tail -n +13 | while r
 # ---------------------------------------------------------------------------
 summary_line="$COMPANY Security — $COMPUTER ($WHO): $WARN need attention, $REVIEW to review [$OVERALL]"
 
-# (a) Optional lightweight JSON webhook — sent every run for fleet inventory.
-if [ -n "$WEBHOOK_URL" ]; then
+# (a) Optional JSON webhook — e.g. a Power Automate / relay endpoint that emails
+#     IT. Sent when something needs attention (or every run if REPORT_ALWAYS=1).
+#     Includes the full HTML report (base64) so the relay can attach it.
+#     No email credential lives on the Mac — only this endpoint URL.
+if [ -n "$WEBHOOK_URL" ] && { [ "$WARN" -gt 0 ] || [ "$REPORT_ALWAYS" = "1" ]; }; then
+  html_b64=$(base64 < "$REPORT" 2>/dev/null | tr -d '\n')
   PAYLOAD=$(mktemp 2>/dev/null || echo "/tmp/msc-payload.$$")
   cat > "$PAYLOAD" <<JSON
-{"tool":"$(json_esc "$COMPANY") Mac Endpoint Security","computer":"$(json_esc "$COMPUTER")","user":"$(json_esc "$WHO")","os":"$(json_esc "$OSVER")","timestamp":"$(json_esc "$NOW")","overall":"$OVERALL","counts":{"attention":$WARN,"review":$REVIEW,"ok":$OKN},"findings":[$FINDINGS_JSON],"text":"$(json_esc "$summary_line")"}
+{"tool":"$(json_esc "$COMPANY") Mac Endpoint Security","company":"$(json_esc "$COMPANY")","computer":"$(json_esc "$COMPUTER")","user":"$(json_esc "$WHO")","os":"$(json_esc "$OSVER")","timestamp":"$(json_esc "$NOW")","overall":"$OVERALL","counts":{"attention":$WARN,"review":$REVIEW,"ok":$OKN},"findings":[$FINDINGS_JSON],"text":"$(json_esc "$summary_line")","report_html_b64":"$html_b64"}
 JSON
-  curl -sS -m 20 -X POST -H 'Content-Type: application/json' --data @"$PAYLOAD" "$WEBHOOK_URL" >/dev/null 2>&1 || true
+  if [ -n "$REPORT_TOKEN" ]; then
+    curl -sS -m 30 -X POST -H 'Content-Type: application/json' -H "X-Report-Token: $REPORT_TOKEN" --data @"$PAYLOAD" "$WEBHOOK_URL" >/dev/null 2>&1 || true
+  else
+    curl -sS -m 30 -X POST -H 'Content-Type: application/json' --data @"$PAYLOAD" "$WEBHOOK_URL" >/dev/null 2>&1 || true
+  fi
   rm -f "$PAYLOAD" 2>/dev/null || true
 fi
 
