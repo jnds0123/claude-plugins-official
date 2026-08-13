@@ -135,7 +135,15 @@ section() {
 # exhaustive — a match means "almost certainly fine"; a non-match just means
 # "we couldn't auto-confirm it," NOT "bad."
 is_known_vendor() {
-  echo "$1" | grep -qiE '(com\.apple\.|com\.google\.|keystone|com\.microsoft\.|com\.adobe\.|dropbox|com\.docker\.|us\.zoom\.|com\.spotify\.|1password|com\.agilebits|com\.logi|logitech|com\.parallels|com\.amazon|slack|webex|com\.teamviewer|com\.citrix|com\.vmware|com\.cisco|umbrella|com\.zscaler|zscaler|netskope|okta|com\.jamf|jamf|com\.crowdstrike|falcon|sentinelone|com\.fortinet|forticlient|fortimonitor|com\.microsoft\.wdav|defender|com\.kandji|kandji|mosyle|addigy|nomad|/Applications/)'
+  echo "$1" | grep -qiE '(com\.apple\.|com\.google\.|keystone|com\.microsoft\.|com\.adobe\.|dropbox|com\.docker\.|us\.zoom\.|com\.spotify\.|1password|com\.agilebits|com\.logi|logitech|com\.parallels|com\.amazon|slack|com\.vmware|com\.cisco|umbrella|com\.zscaler|zscaler|netskope|okta|com\.jamf|jamf|com\.crowdstrike|falcon|sentinelone|com\.fortinet|forticlient|fortimonitor|com\.microsoft\.wdav|defender|com\.kandji|kandji|mosyle|addigy|nomad|/Applications/)'
+}
+
+# Remote-access / remote-control software. Company policy: these must run
+# ON DEMAND only (for IT support sessions), never set to auto-start — an
+# auto-starting remote-control tool lets someone reach this Mac at any time.
+# Matched in persistence locations (launch items, login items) and flagged.
+is_remote_access() {
+  echo "$1" | grep -qiE '(teamviewer|logmein|log ?me ?in|hamachi|anydesk|any ?desk|gotomypc|goto ?assist|go ?to ?assist|splashtop|screenconnect|screen ?connect|connectwise|bomgar|beyondtrust|remotepc|remote ?pc|realvnc|tightvnc|ultravnc|tigervnc|vnc|chrome ?remote|remotedesktop|remote ?desktop|nomachine|rustdesk|parsec|supremo|ammyy|dwservice|dwagent|zoho ?assist|isl ?online|isllight|netop|dameware|/ARDAgent|ard ?agent|apple ?remote ?desktop|kickstart)'
 }
 
 # Judge a launchd plist. Emits a card.
@@ -184,6 +192,14 @@ judge_plist() {
   if echo "$fullargs" | grep -qiE '(curl|wget|base64|osascript|/bin/sh|/bin/bash|python).*(http|-c|-e|decode)'; then
     level="warn"
     reasons="$reasons It launches a script or downloads-and-runs code — a common way unwanted software hides. Review the exact command below. "
+  fi
+
+  # Policy: remote-access software must not be set to auto-start. Because this
+  # plist lives in a launch location, the tool IS configured to start
+  # automatically — flag it regardless of vendor/signature.
+  if is_remote_access "$label $exe"; then
+    level="warn"
+    reasons="POLICY ALERT: This is remote-access / remote-control software (\"$label\") set to start automatically. Company policy: remote-support tools must run ON DEMAND only — an auto-starting remote tool lets someone control this Mac at any time. If you did not set this up deliberately for a support session, disable its automatic startup and contact IT. $reasons"
   fi
 
   # If nothing tripped, try to reassure by naming the vendor.
@@ -263,6 +279,10 @@ scan_dir "$HOME/Library/LaunchAgents" "your account, at login"
 LI=$(osascript -e 'tell application "System Events" to get the name of every login item' 2>/dev/null)
 if [ -n "$LI" ]; then
   add_card review "Login items: $LI" "Apps set to open when you log in." "Look at the list. Anything you don't recognize can be removed in System Settings > General > Login Items & Extensions."
+  # Policy: remote-access tools must not auto-open at login.
+  if is_remote_access "$LI"; then
+    add_card warn "Remote-access app set to open at login" "$LI" "POLICY ALERT: A remote-access / remote-control app is set to open automatically at login. These must run ON DEMAND only (for IT support), not auto-start. Remove it from System Settings > General > Login Items & Extensions unless IT told you to keep it."
+  fi
 else
   add_card ok "Login items" "Apps set to open when you log in." "None found, or none that needed flagging."
 fi
