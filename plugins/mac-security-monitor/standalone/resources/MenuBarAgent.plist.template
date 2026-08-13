@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Keeps the Mac Defender menu-bar app running for the logged-in user.
+  __MENU_BUNDLE_ID__ and __APP_PATH__ are substituted by build-and-sign.sh.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>__MENU_BUNDLE_ID__</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__APP_PATH__/Contents/MacOS/MacDefender</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ProcessType</key>
+    <string>Interactive</string>
+    <key>StandardOutPath</key>
+    <string>/tmp/mac-defender-menubar.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/mac-defender-menubar.log</string>
+</dict>
+</plist>

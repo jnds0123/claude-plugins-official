@@ -390,6 +390,13 @@ HTMLFOOT
 # Keep the archive tidy: retain only the 12 most recent stored reports.
 ls -1t "$ARCHIVE"/Mac-Security-Report-*.html 2>/dev/null | tail -n +13 | while read -r old; do rm -f "$old"; done
 
+# Publish a stable latest-report copy and a status.json for the menu-bar app.
+SUPPORT_DIR="$HOME/Library/Application Support/MacSecurityCheck"
+cp "$REPORT" "$SUPPORT_DIR/latest-report.html" 2>/dev/null || true
+cat > "$SUPPORT_DIR/status.json" <<JSON
+{"overall":"$OVERALL","attention":$WARN,"review":$REVIEW,"ok":$OKN,"timestamp":"$(json_esc "$NOW")","report":"$SUPPORT_DIR/latest-report.html"}
+JSON
+
 # ---------------------------------------------------------------------------
 # Central reporting to IT (only if configured by the installer's config.sh).
 # Sends a compact summary of flagged software — never personal file content.

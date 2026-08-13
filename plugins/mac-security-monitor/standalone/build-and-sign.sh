@@ -36,6 +36,11 @@ BUNDLE_ID="${BUNDLE_ID:-com.jnds0123.mac-security-check}"
 COMPANY="${COMPANY:-Nourison Home}"          # company name shown on installer screens
 APP_TITLE="${APP_TITLE:-$COMPANY Mac Endpoint Security}"  # installer window title
 PKG_NAME="${PKG_NAME:-MacSecurityCheck}"     # base name of the output .pkg file
+BUILD_APP="${BUILD_APP:-1}"                  # 1 = also build the menu-bar app; 0 = skip
+APP_NAME="${APP_NAME:-$COMPANY Mac Defender}"          # menu-bar app display name
+APP_BUNDLE_ID="${APP_BUNDLE_ID:-$BUNDLE_ID.app}"       # menu-bar app bundle id
+MENU_BUNDLE_ID="${MENU_BUNDLE_ID:-$BUNDLE_ID.menubar}" # LaunchAgent label for the app
+APP_IDENTITY="${APP_IDENTITY:-}"             # "Developer ID Application: ..." ; auto-detected
 TEAM_ID="${TEAM_ID:-}"                       # e.g. ABCDE12345 (required)
 INSTALLER_IDENTITY="${INSTALLER_IDENTITY:-}" # full "Developer ID Installer: ..." string; auto-detected if blank
 NOTARY_PROFILE="${NOTARY_PROFILE:-MSC_NOTARY}"
@@ -72,6 +77,21 @@ if [ -z "$INSTALLER_IDENTITY" ]; then
 fi
 inf "signing as: $INSTALLER_IDENTITY"
 
+# ----------------------- auto-detect application identity -------------------
+if [ "$BUILD_APP" = "1" ]; then
+  if [ -z "$APP_IDENTITY" ]; then
+    APP_IDENTITY="$(security find-identity -v 2>/dev/null | grep 'Developer ID Application' | head -1 | sed -E 's/^.*"(.*)"$/\1/')"
+  fi
+  if [ -z "$APP_IDENTITY" ]; then
+    red "No 'Developer ID Application' certificate found (needed to sign the menu-bar app)."
+    red "Add it in Xcode > Settings > Accounts > Manage Certificates, or set BUILD_APP=0 to skip the app."
+    exit 1
+  fi
+  command -v swiftc >/dev/null 2>&1 || { red "swiftc not found. Install Xcode / command line tools, or set BUILD_APP=0."; exit 1; }
+  inf "app signing:  $APP_IDENTITY"
+  inf "app name:     $APP_NAME"
+fi
+
 # ----------------------------- assemble payload -----------------------------
 rm -rf "$BUILD"; mkdir -p "$BUILD/payload" "$BUILD/scripts" "$DIST"
 
@@ -107,13 +127,38 @@ else
   inf "email reporting: disabled (set SMTP_HOST/SMTP_USER/SMTP_PASS/REPORT_EMAIL to enable)"
 fi
 
-# LaunchAgent + postinstall, with the bundle id substituted in.
+# Scan LaunchAgent.
 sed "s/__BUNDLE_ID__/$BUNDLE_ID/g" "$RES/LaunchAgent.plist.template" > "$LAUNCH/$BUNDLE_ID.plist"
-sed "s/__BUNDLE_ID__/$BUNDLE_ID/g" "$RES/postinstall" > "$BUILD/scripts/postinstall"
+plutil -lint "$LAUNCH/$BUNDLE_ID.plist" >/dev/null
+
+# postinstall (loads both the scan agent and, if present, the menu-bar agent).
+sed -e "s/__BUNDLE_ID__/$BUNDLE_ID/g" -e "s/__MENU_BUNDLE_ID__/$MENU_BUNDLE_ID/g" \
+    "$RES/postinstall" > "$BUILD/scripts/postinstall"
 chmod 755 "$BUILD/scripts/postinstall"
 
-# Sanity-check the generated plist.
-plutil -lint "$LAUNCH/$BUNDLE_ID.plist" >/dev/null
+# ---------------------- compile + bundle the menu-bar app -------------------
+if [ "$BUILD_APP" = "1" ]; then
+  grn "Compiling menu-bar app ($APP_NAME)..."
+  APPDIR="$BUILD/payload/Applications/$APP_NAME.app"
+  mkdir -p "$APPDIR/Contents/MacOS"
+  swiftc -O -o "$APPDIR/Contents/MacOS/MacDefender" "$HERE/app/main.swift" \
+    -framework Cocoa -framework WebKit
+  sed -e "s/__APP_NAME__/$APP_NAME/g" -e "s/__APP_BUNDLE_ID__/$APP_BUNDLE_ID/g" -e "s/__VERSION__/$VERSION/g" \
+    "$HERE/app/Info.plist.template" > "$APPDIR/Contents/Info.plist"
+  plutil -lint "$APPDIR/Contents/Info.plist" >/dev/null
+
+  grn "Signing menu-bar app (hardened runtime)..."
+  codesign --force --options runtime --timestamp --sign "$APP_IDENTITY" "$APPDIR"
+  codesign --verify --deep --strict "$APPDIR"
+
+  # Menu-bar LaunchAgent (keeps the app running at login).
+  sed -e "s/__MENU_BUNDLE_ID__/$MENU_BUNDLE_ID/g" -e "s#__APP_PATH__#/Applications/$APP_NAME.app#g" \
+    "$RES/MenuBarAgent.plist.template" > "$LAUNCH/$MENU_BUNDLE_ID.plist"
+  plutil -lint "$LAUNCH/$MENU_BUNDLE_ID.plist" >/dev/null
+  inf "menu-bar app: /Applications/$APP_NAME.app"
+else
+  inf "menu-bar app: skipped (BUILD_APP=0)"
+fi
 
 # ------------------------------- build pkg ----------------------------------
 grn "Building component package..."
