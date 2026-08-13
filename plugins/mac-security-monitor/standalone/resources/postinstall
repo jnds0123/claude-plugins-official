@@ -6,22 +6,23 @@
 #
 # __BUNDLE_ID__ is substituted by build-and-sign.sh at build time.
 
-BUNDLE_ID="__BUNDLE_ID__"
-PLIST="/Library/LaunchAgents/${BUNDLE_ID}.plist"
-
 # Make sure the engine is executable.
 chmod 755 "/Library/Application Support/MacSecurityCheck/mac-security-check" 2>/dev/null || true
-chmod 644 "$PLIST" 2>/dev/null || true
 
 # Who is at the keyboard right now?
 CONSOLE_USER=$(stat -f %Su /dev/console 2>/dev/null)
 if [ -n "$CONSOLE_USER" ] && [ "$CONSOLE_USER" != "root" ]; then
   UID_NUM=$(id -u "$CONSOLE_USER" 2>/dev/null)
   if [ -n "$UID_NUM" ]; then
-    # Reload cleanly in case a previous version was installed.
-    launchctl bootout "gui/${UID_NUM}" "$PLIST" 2>/dev/null || true
-    launchctl bootstrap "gui/${UID_NUM}" "$PLIST" 2>/dev/null \
-      || launchctl load -w "$PLIST" 2>/dev/null || true
+    # Load the scan agent and (if the menu-bar app was built) its agent too.
+    for LABEL in "__BUNDLE_ID__" "__MENU_BUNDLE_ID__"; do
+      PLIST="/Library/LaunchAgents/${LABEL}.plist"
+      [ -f "$PLIST" ] || continue
+      chmod 644 "$PLIST" 2>/dev/null || true
+      launchctl bootout "gui/${UID_NUM}" "$PLIST" 2>/dev/null || true
+      launchctl bootstrap "gui/${UID_NUM}" "$PLIST" 2>/dev/null \
+        || launchctl load -w "$PLIST" 2>/dev/null || true
+    done
   fi
 fi
 
